@@ -1,0 +1,18 @@
+Nên đưa lên MongoDB (nếu bạn cần đăng nhập nhiều thiết bị, sao lưu/khôi phục, hoặc backend xử lý dữ liệu):
+
+users (tài khoản, thông tin hồ sơ) – hiện backend/server.js đã có đăng ký/đăng nhập Mongo.
+Thu/chi (incomes, expenses) – để đồng bộ và xem ở nhiều thiết bị/web.
+Ngân sách (budgets) – cần nhất nếu báo cáo/giới hạn chi tiêu đa thiết bị.
+Mục tiêu tiết kiệm & đóng góp (savings_goals, savings_contributions, savings_monthly_goals) – để không mất khi đổi máy.
+Phản hồi/feedback – nếu muốn gửi về server để phân tích.
+Có thể giữ lại local SQLite (không nhất thiết phải lên Mongo) nếu chỉ dùng trên máy hiện tại:
+
+notifications nội bộ app, nhắc nhở cục bộ.
+recurring_expenses nếu chỉ cần máy tự tạo chi định kỳ; nếu muốn đồng bộ lịch định kỳ thì mới cần server.
+Session/token, cache giao diện, cài đặt ngôn ngữ (AppLocaleManager) nằm local.
+Dữ liệu tạm, thống kê nhanh: có thể tính lại từ server hoặc lưu cache cục bộ.
+Lộ trình đề xuất:
+
+Hoàn thiện backend Mongo cho bảng cốt lõi: users (đã có), incomes, expenses, budgets, savings*.
+Trong app, thêm lớp repository đồng bộ: đọc/ghi Mongo (qua API) + cache SQLite để offline (nếu cần).
+Giữ notifications, locale, cache ở SQLite; chỉ chuyển nếu có yêu cầu đồng bộ/thông báo push.

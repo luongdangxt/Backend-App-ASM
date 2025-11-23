@@ -1,0 +1,26 @@
+# Node/Backend
+node_modules/
+backend/.env
+backend/.env.local
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Build/coverage
+dist/
+build/
+coverage/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Android/Java project
+APP Management/.idea/
+APP Management/*.iml
+APP Management/.gradle/
+APP Management/local.properties
+APP Management/**/build/
+APP Management/.cxx/
+APP Management/captures/
