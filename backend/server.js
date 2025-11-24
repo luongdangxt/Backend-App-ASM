@@ -263,10 +263,10 @@ authRouter.get('/me', authRequired, async (req, res) => {
   }
 });
 
-// Auth: update profile (username/fullName/email/phone)
+// Auth: update profile (username/fullName/email/phone/password)
 authRouter.put('/profile', authRequired, async (req, res) => {
   try {
-    const { username, fullName, email, phone } = req.body;
+    const { username, fullName, email, phone, password } = req.body;
     const update = {};
     const cleanUsername = typeof username === 'string' ? username.trim() : undefined;
     const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
@@ -276,6 +276,12 @@ authRouter.put('/profile', authRequired, async (req, res) => {
     if (cleanEmail !== undefined) update.email = cleanEmail;
     if (cleanFullName !== undefined) update.fullName = cleanFullName;
     if (cleanPhone !== undefined) update.phone = cleanPhone;
+    if (typeof password === 'string' && password.trim().length > 0) {
+      if (password.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters' });
+      }
+      update.passwordHash = await bcrypt.hash(password, 10);
+    }
     if (Object.keys(update).length === 0) return res.status(400).json({ message: 'No changes provided' });
 
     const existingUsername = update.username
