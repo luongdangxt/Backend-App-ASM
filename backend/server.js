@@ -28,6 +28,8 @@ const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, lowercase: true, trim: true, sparse: true },
   passwordHash: { type: String, required: true },
   clientId: { type: Number, unique: true, index: true },
+  fullName: { type: String, trim: true },
+  phone: { type: String, trim: true },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -117,6 +119,13 @@ const createToken = (user) => jwt.sign(
   JWT_SECRET,
   { expiresIn: '7d' }
 );
+const toPublicUser = (user) => ({
+  id: user.clientId,
+  username: user.username,
+  email: user.email,
+  fullName: user.fullName,
+  phone: user.phone
+});
 
 const authRequired = (req, res, next) => {
   const header = req.headers.authorization || '';
@@ -140,14 +149,18 @@ const financeRouter = express.Router();
 // Auth: register
 authRouter.post('/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, fullName, phone } = req.body;
+    const cleanUsername = (username || '').trim();
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+    const cleanFullName = typeof fullName === 'string' ? fullName.trim() : undefined;
+    const cleanPhone = typeof phone === 'string' ? phone.trim() : undefined;
 
-    if (!username || !password) {
+    if (!cleanUsername || !password) {
       return res.status(400).json({ message: 'username and password are required' });
     }
 
-    const search = [{ username }];
-    if (email) search.push({ email });
+    const search = [{ username: cleanUsername }];
+    if (cleanEmail) search.push({ email: cleanEmail });
 
     const existingUser = await User.findOne({ $or: search });
     if (existingUser) {
@@ -157,12 +170,19 @@ authRouter.post('/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const last = await User.findOne().sort({ clientId: -1 }).select('clientId').lean();
     const nextClientId = last && typeof last.clientId === 'number' ? last.clientId + 1 : 1;
-    const user = await User.create({ username, email, passwordHash, clientId: nextClientId });
+    const user = await User.create({
+      username: cleanUsername,
+      email: cleanEmail,
+      passwordHash,
+      clientId: nextClientId,
+      fullName: cleanFullName,
+      phone: cleanPhone
+    });
     const token = createToken(user);
 
     return res.status(201).json({
       message: 'Registered successfully',
-      user: { id: user.clientId, username: user.username, email: user.email },
+      user: toPublicUser(user),
       token
     });
   } catch (err) {
@@ -180,7 +200,9 @@ authRouter.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'username (or email) and password are required' });
     }
 
-    const query = username ? { username } : { email };
+    const query = username
+      ? { username: username.trim() }
+      : { email: typeof email === 'string' ? email.trim().toLowerCase() : email };
     const user = await User.findOne(query);
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -202,7 +224,7 @@ authRouter.post('/login', async (req, res) => {
 
     return res.json({
       message: 'Login successful',
-      user: { id: user.clientId, username: user.username, email: user.email },
+      user: toPublicUser(user),
       token
     });
   } catch (err) {
@@ -222,7 +244,7 @@ authRouter.get('/user/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    return res.json({ user: { id: user.clientId, username: user.username, email: user.email } });
+    return res.json({ user: toPublicUser(user) });
   } catch (err) {
     console.error('Fetch user error', err);
     return res.status(500).json({ message: 'Unexpected error' });
@@ -234,7 +256,7 @@ authRouter.get('/me', authRequired, async (req, res) => {
   try {
     const user = await User.findOne({ clientId: req.user.clientId }).lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
-    return res.json({ user: { id: user.clientId, username: user.username, email: user.email } });
+    return res.json({ user: toPublicUser(user) });
   } catch (err) {
     console.error('Auth me error', err);
     return res.status(500).json({ message: 'Unexpected error' });
@@ -246,10 +268,14 @@ authRouter.put('/profile', authRequired, async (req, res) => {
   try {
     const { username, fullName, email, phone } = req.body;
     const update = {};
-    if (username) update.username = username.trim();
-    if (email) update.email = email.trim();
-    if (fullName !== undefined) update.fullName = fullName;
-    if (phone !== undefined) update.phone = phone;
+    const cleanUsername = typeof username === 'string' ? username.trim() : undefined;
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+    const cleanFullName = typeof fullName === 'string' ? fullName.trim() : undefined;
+    const cleanPhone = typeof phone === 'string' ? phone.trim() : undefined;
+    if (cleanUsername) update.username = cleanUsername;
+    if (cleanEmail !== undefined) update.email = cleanEmail;
+    if (cleanFullName !== undefined) update.fullName = cleanFullName;
+    if (cleanPhone !== undefined) update.phone = cleanPhone;
     if (Object.keys(update).length === 0) return res.status(400).json({ message: 'No changes provided' });
 
     const existingUsername = update.username
@@ -257,9 +283,14 @@ authRouter.put('/profile', authRequired, async (req, res) => {
       : null;
     if (existingUsername) return res.status(409).json({ message: 'Username already exists' });
 
+    const existingEmail = update.email
+      ? await User.findOne({ email: update.email, clientId: { $ne: req.user.clientId } }).lean()
+      : null;
+    if (existingEmail) return res.status(409).json({ message: 'Email already exists' });
+
     const user = await User.findOneAndUpdate({ clientId: req.user.clientId }, { $set: update }, { new: true });
     if (!user) return res.status(404).json({ message: 'User not found' });
-    return res.json({ user: { id: user.clientId, username: user.username, email: user.email, fullName: user.fullName, phone: user.phone } });
+    return res.json({ user: toPublicUser(user) });
   } catch (err) {
     console.error('Update profile error', err);
     return res.status(500).json({ message: 'Unexpected error' });
